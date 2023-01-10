@@ -1,6 +1,7 @@
 import enum
 import json
 import pygame
+import random
 import sys
 
 pygame.init()
@@ -10,7 +11,7 @@ SCREEN_DIMENSIONS = (1200, 896)
 SCREEN_BUFFER = 0.5
 BACKGROUND_COLOR = (150, 150, 255)
 SPRITE_SCALE = (100, 100) # Resize all sprites to 100x100
-FPS = 100
+FPS = 60
 
 
 def get_rect_dimensions(sprite_meta):
@@ -175,6 +176,12 @@ class WorldObject:
 
 class Enemy(WorldObject):
     SPRITE_SHEET = SpriteSheet.ENEMIES
+    ANIMATION_DELAY = 5
+    FALL_LIKE_A_TREE_IN_THE_FOREST = 10
+    # But if there is no one around to hear it, does it make a sound?
+    SPEED = 2
+    # GIVE ME WHAT I NEED
+    # WHITE LIGHTNING
 
     def __init__(self, object_meta, screen, sprite_sheet, world):
         super().__init__(object_meta)
@@ -182,11 +189,35 @@ class Enemy(WorldObject):
         self.screen = screen
         self.sprite_sheet = sprite_sheet
         self.world = world
-        self.sprite = self.sprite_sheet.get_sprite(self.SPRITE_SHEET,
-                                                   'student_1_enemy_1_step_1')
+        enemy_number = random.randint(1, 20)
+        sprite_names = [f'student_{enemy_number}_enemy_1_step_1',
+                        f'student_{enemy_number}_enemy_1_step_2']
+        self.sprites = [self.sprite_sheet.get_sprite(self.SPRITE_SHEET, sprite_name)
+                        for sprite_name in sprite_names]
+        self.animation_count = 9001
+        self.animation_frame = 0
         
     def draw(self):
+        if self.animation_count >= self.ANIMATION_DELAY:
+            self.animation_frame = not self.animation_frame
+            self.sprite = self.sprites[self.animation_frame]
+            self.animation_count = 0
+        else:
+            self.animation_count += 1
         self.screen.blit(self.sprite, self.rect)
+
+    def update_movement(self):
+        dy = self.FALL_LIKE_A_TREE_IN_THE_FOREST
+        dx = self.SPEED
+        for world_object in self.world.objects:
+            if world_object.rect.colliderect(self.rect.x, self.rect.y + dy, *SPRITE_SCALE) and dy > 0:
+                # Fix velocity to the distance between the sprites
+                dy = world_object.rect.top - self.rect.bottom
+            if world_object.rect.colliderect(self.rect.x + dx, self.rect.y, *SPRITE_SCALE):
+                # Fix velocity to the distance between the sprites
+                dx = 0
+        self.rect.y -= dy
+        self.rect.x -= dx
 
 
 class GameWorld:
@@ -210,8 +241,17 @@ class GameWorld:
         self.collideable = self.objects + self.enemies + [self.backwall]
     
     def render_world(self):
+        """Description of the function/method.
+
+        Parameters:
+            <param>: Description of the parameter
+
+        Returns:
+            <variable>: Description of the return value
+        """
         self.screen.blit(self.background, self.background_coordinates)
         for enemy in self.enemies:
+            enemy.update_movement()
             enemy.draw()
         for world_object in self.collideable:
             pygame.draw.rect(self.screen, (0, 0, 255), world_object.rect, 8)
