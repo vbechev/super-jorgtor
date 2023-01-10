@@ -29,7 +29,7 @@ class SpriteSheet:
             self.TILE_SET: pygame.image.load(f'graphics/{self.TILE_SET}.png').convert_alpha(),
         }
 
-    def get_sprite(self, sprite_type, sprite_id, position, size=SPRITE_SCALE, mirror=False):
+    def get_sprite(self, sprite_type, sprite_id, size=SPRITE_SCALE, flip=False):
         sheet = self.sprite_sheets[sprite_type]
         sprite_meta = self.sprites_meta[sprite_type][sprite_id]
         rect = pygame.Rect(sprite_meta['x'],
@@ -40,13 +40,16 @@ class SpriteSheet:
         sprite.blit(sheet, (0, 0), rect)
         sprite = pygame.transform.scale(sprite, size)
         sprite.set_colorkey((0, 0, 0))
+        if flip:
+            sprite = pygame.transform.flip(sprite, True, False)
         return sprite
 
 
 class PlayerState(enum.Enum):
     STATIC = 1
     WALKING = 2
-    AIRBORN = 3
+    JUMPING = 3
+    FALLING = 4
 
 
 class Player:
@@ -55,7 +58,8 @@ class Player:
     MAX_VELOCITY = -15
     MAX_GRAVITY = 10
     SPRITES = {PlayerState.WALKING: ['small_mario_{}'.format(i) for i in (1, 2, 3)],
-               PlayerState.AIRBORN: ['small_mario_5'],
+               PlayerState.FALLING: ['small_mario_4'],
+               PlayerState.JUMPING: ['small_mario_5'],
                PlayerState.STATIC: ['small_mario_7']}
     SPRITE_SHEET = SpriteSheet.TILE_SET
     ANIMATION_DELAY = 10
@@ -75,12 +79,15 @@ class Player:
         self.update_sprite()
 
     def update_sprite(self):
-        if self.velocity_y != 10:
-            state = PlayerState.AIRBORN
+        if self.velocity_y < 0:
+            state = PlayerState.JUMPING
+        elif self.velocity_y > 0:
+            state = PlayerState.FALLING
         elif self.velocity_x != 0:
             state = PlayerState.WALKING
         else:
             state = PlayerState.STATIC
+        flip = self.velocity_x < 0
         sprites = self.SPRITES[state]
 
         if state != PlayerState.WALKING:
@@ -93,7 +100,7 @@ class Player:
             sprite_name = sprites[self.animation_frame]
             self.sprite = self.sprite_sheet.get_sprite(self.SPRITE_SHEET,
                                                        sprite_name,
-                                                       (self.rect.x, self.rect.y))
+                                                       flip=flip)
             self.animation_frame += 1
             self.animation_count = 0
         else:
