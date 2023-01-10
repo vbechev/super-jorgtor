@@ -7,6 +7,7 @@ pygame.init()
 
 # Constants
 SCREEN_DIMENSIONS = (1200, 896)
+SCREEN_BUFFER = 0.5
 BACKGROUND_COLOR = (150, 150, 255)
 SPRITE_SCALE = (100, 100) # Resize all sprites to 100x100
 FPS = 60
@@ -63,10 +64,10 @@ class PlayerState(enum.Enum):
 
 class Player:
     MOVE_SPEED = 8
-    JUMP_FORCE = 10
-    GRAVITY = 1
+    JUMP_FORCE = 20
+    GRAVITY = 2
     MAX_GRAVITY = 16
-    MAX_JUMP = 30
+    MAX_JUMP = 20
     SPRITES = {PlayerState.WALKING: ['small_mario_{}'.format(i) for i in (1, 2, 3)],
                PlayerState.FALLING: ['small_mario_4'],
                PlayerState.JUMPING: ['small_mario_5'],
@@ -130,21 +131,32 @@ class Player:
         if key[pygame.K_SPACE] and self.can_jump:
             self.velocity_y = -(self.JUMP_FORCE + self.jump_hold // self.JUMP_FORCE)
             self.jump_hold -= 1
-            # Bug here with multiple jupms, oh well
+            # Bug here with multiple jumps, oh well
 
     def update_movement(self):
+        # Handle vertical movement
         if self.velocity_y <= self.MAX_GRAVITY:
             self.velocity_y += self.GRAVITY
         if self.jump_hold == 0:
             self.can_jump = False
-        for ground in self.world.ground:
-            if ground.colliderect(self.rect.x, self.rect.y + self.velocity_y, *SPRITE_SCALE) and self.velocity_y > 0:
+        for world_object in self.world.objects:
+            if world_object.colliderect(self.rect.x, self.rect.y + self.velocity_y, *SPRITE_SCALE) and self.velocity_y > 0:
                 # Fix velocity to the distance between the sprites
-                self.velocity_y = ground.top - self.rect.bottom
+                self.velocity_y = world_object.top - self.rect.bottom
                 self.can_jump = True
                 self.jump_hold = self.MAX_JUMP
-        self.rect.x += self.velocity_x
         self.rect.y += self.velocity_y
+
+        # Handle horizontal movement
+        for world_object in self.world.objects:
+            if world_object.colliderect(self.rect.x + self.velocity_x, self.rect.y, *SPRITE_SCALE):
+                self.velocity_x = 0
+        if self.rect.right  >= SCREEN_DIMENSIONS[0] * SCREEN_BUFFER and self.velocity_x > 0:
+            self.world.scroll(self.velocity_x)
+            # Apart from scrolling the world, we need to keep the player in the screen
+            # so no movement of the player occurs in this case
+        else:
+            self.rect.x += self.velocity_x
 
     def update(self):
         self.parse_controls()
@@ -161,15 +173,27 @@ class GameWorld:
         self.screen = screen
         # Setup background
         self.background = pygame.image.load(f'graphics/level_1.png')
+        self.background_coordinates = [0, 0] # For scrolling
         # Setup world
         with open('jsons/level_1.json') as level_file:
             world_meta = json.load(level_file)
         self.ground = [pygame.Rect(get_rect_dimensions(ground)) for ground in world_meta['ground']]
+        self.offset = 0
+        # Put a wall like in Trouman's Show
+        self.backwall = pygame.Rect(-10, 0, 10, 1000)
+        self.objects = self.ground + [self.backwall]
     
     def render_world(self):
-        self.screen.blit(self.background, (0, 0))
+        self.screen.blit(self.background, self.background_coordinates)
         for ground_rect in self.ground:
             pygame.draw.rect(self.screen, (0, 0, 255), ground_rect, 8)
+    
+    def scroll(self, offset):
+        self.offset += offset
+        for ground in self.ground:
+            ground.x -= offset
+        self.background_coordinates[0] = -self.offset
+        
 
 
 def main(screen):
