@@ -1,6 +1,5 @@
 import enum
 import json
-import itertools
 import pygame
 import sys
 
@@ -28,8 +27,14 @@ class SpriteSheet:
             self.ENEMIES: pygame.image.load(f'graphics/{self.ENEMIES}.png').convert_alpha(),
             self.TILE_SET: pygame.image.load(f'graphics/{self.TILE_SET}.png').convert_alpha(),
         }
+        self.cached = {}
 
     def get_sprite(self, sprite_type, sprite_id, size=SPRITE_SCALE, flip=False):
+        try:
+            return self.cached[sprite_type][sprite_id]
+        except KeyError:
+            # Nothing in the cache ;(
+            pass
         sheet = self.sprite_sheets[sprite_type]
         sprite_meta = self.sprites_meta[sprite_type][sprite_id]
         rect = pygame.Rect(sprite_meta['x'],
@@ -42,6 +47,7 @@ class SpriteSheet:
         sprite.set_colorkey((0, 0, 0))
         if flip:
             sprite = pygame.transform.flip(sprite, True, False)
+        self.cached[(sprite_type, sprite_id, flip)] = sprite
         return sprite
 
 
@@ -53,10 +59,10 @@ class PlayerState(enum.Enum):
 
 
 class Player:
-    MOVE_SPEED = 5
-    JUMP_FORCE = 5
-    MAX_VELOCITY = -15
-    MAX_GRAVITY = 10
+    MOVE_SPEED = 8
+    JUMP_FORCE = 8
+    MAX_VELOCITY = -25
+    MAX_GRAVITY = 16
     SPRITES = {PlayerState.WALKING: ['small_mario_{}'.format(i) for i in (1, 2, 3)],
                PlayerState.FALLING: ['small_mario_4'],
                PlayerState.JUMPING: ['small_mario_5'],
@@ -105,6 +111,8 @@ class Player:
             self.animation_count = 0
         else:
             self.animation_count += 1
+        self.screen.blit(self.sprite, self.rect)
+        # pygame.draw.rect(self.screen, (255, 255, 255), self.rect, 2)
 
     def update(self):
         self.velocity_x = 0
@@ -125,16 +133,32 @@ class Player:
             self.velocity_y += 1
 
         self.update_sprite()
-        self.screen.blit(self.sprite, self.rect)
+
+
+class Tile:
+    pass
+
+
+class GameWorld:
+    def __init__(self, screen):
+        self.screen = screen
+        self.background = pygame.image.load(f'graphics/level_1.png')
+        scale = SCREEN_DIMENSIONS[1] / self.background.get_height()
+        scaled_size = tuple(int(size * scale) for size in self.background.get_size())
+        self.background = pygame.transform.scale(self.background, scaled_size)
+    
+    def render_world(self):
+        self.screen.blit(self.background, (0, 0))
 
 
 def main(screen):
     clock = pygame.time.Clock()
     sprite_sheet = SpriteSheet()
     player = Player(600, 600, screen, sprite_sheet)
+    world = GameWorld(screen)
     while True:
         clock.tick(FPS)
-        screen.fill(BACKGROUND_COLOR)
+        world.render_world()
         player.update()
         if any(event.type == pygame.QUIT
             for event in pygame.event.get()):
